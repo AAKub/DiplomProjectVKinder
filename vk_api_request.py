@@ -6,7 +6,12 @@ class VkUser:
     BASE_URL = "https://api.vk.com/method/"
     PROTOCOL_VERSION = "5.131"
     METHOD_USERS_GET = "users.get"
-    FIELDS = 'bdate, sex, city, relation'
+    FIELDS = {
+        'bdate': 'день рождения',
+        'sex': 'пол',
+        'city': 'город',
+        'relation': 'семейное положение'
+    }
     METHOD_USERS_SEARCH = "users.search"
     COUNT_USERS_SEARCH = 10
     METHOD_PHOTOS_GET = "photos.get"
@@ -16,6 +21,10 @@ class VkUser:
         self.token = token
         self.user_id = user_id
 
+    def get_token(self):
+        AUTH_LINK = 'https://oauth.vk.com/authorize?client_id=' + self.user_id + '&display=page&redirect_uri=https://oauth.vk.com/blank.html&scope=status.offline&response_type=token&v=' + self.PROTOCOL_VERSION
+        return 'Токен можно получить по этой ссылке: ' + AUTH_LINK
+
     def get_url(self, method_name):
         return f'{self.BASE_URL}{method_name}'
 
@@ -24,7 +33,7 @@ class VkUser:
         params = {
             'access_token': self.token,
             'user_ids': self.user_id,
-            'fields': self.FIELDS,
+            'fields': ', '.join(f'{k}' for k in self.FIELDS.keys()),
             'v': self.PROTOCOL_VERSION
         }
         response = requests.get(url, params=params)
@@ -32,11 +41,10 @@ class VkUser:
         return response.json()
 
     def check_user_info(self, user_info):
-        list_fields = list(self.FIELDS.split(', '))
         empty_fields = ''
-        for item in list_fields:
-            if item not in user_info['response'][0].keys():
-                empty_fields += item
+        for k, v in self.FIELDS.items():
+            if k not in user_info['response'][0].keys():
+                empty_fields += v + ', '
         if empty_fields != '':
             print('Заполните недостающие данные: ', empty_fields)
             exit()
@@ -85,3 +93,5 @@ class VkUser:
         }
         response = requests.get(url, params=params)
         return response.json()['response']['items']
+
+
