@@ -2,6 +2,8 @@ import requests
 import datetime
 
 
+PROTOCOL_VERSION = "5.131"
+
 class VkUser:
     BASE_URL = "https://api.vk.com/method/"
     PROTOCOL_VERSION = "5.131"
@@ -21,10 +23,6 @@ class VkUser:
         self.token = token
         self.user_id = user_id
 
-    def get_token(self):
-        AUTH_LINK = 'https://oauth.vk.com/authorize?client_id=' + self.user_id + '&display=page&redirect_uri=https://oauth.vk.com/blank.html&scope=status.offline&response_type=token&v=' + self.PROTOCOL_VERSION
-        return 'Токен можно получить по этой ссылке: ' + AUTH_LINK
-
     def get_url(self, method_name):
         return f'{self.BASE_URL}{method_name}'
 
@@ -37,17 +35,16 @@ class VkUser:
             'v': self.PROTOCOL_VERSION
         }
         response = requests.get(url, params=params)
-        self.check_user_info(response.json())
+        check = self.check_user_info(response.json())
+        if check is not None:
+            return check
         return response.json()
 
     def check_user_info(self, user_info):
-        empty_fields = ''
-        for k, v in self.FIELDS.items():
-            if k not in user_info['response'][0].keys():
-                empty_fields += v + ', '
+        empty_fields = ', '.join(f'{v}' for k, v in self.FIELDS.items() if k not in user_info['response'][0].keys())
         if empty_fields != '':
-            print('Заполните недостающие данные: ', empty_fields)
-            exit()
+            return 'Заполните недостающие данные: ' + empty_fields
+        return
 
     def prepare_params_for_users_search(self, user_info):
         params_for_users_search = {}
@@ -70,7 +67,7 @@ class VkUser:
             'age_to': AGE_TO,
             'v': self.PROTOCOL_VERSION,
             'has_photo': 1,
-            'offset': 20
+            'offset': 78
         }
         response = requests.get(url, params=params)
         return response.json()['response']['items']
@@ -94,4 +91,6 @@ class VkUser:
         response = requests.get(url, params=params)
         return response.json()['response']['items']
 
-
+def get_token(client_id):
+    AUTH_LINK = 'https://oauth.vk.com/authorize?client_id=' + client_id + '&display=page&redirect_uri=https://oauth.vk.com/blank.html&scope=status.offline&response_type=token&v=' + PROTOCOL_VERSION
+    return 'Токен можно получить по этой ссылке: ' + AUTH_LINK
