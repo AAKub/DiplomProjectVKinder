@@ -22,10 +22,10 @@ class Candidate(Base):
 class Photo(Base):
     __tablename__ = 'photo'
     id = Column(String, primary_key=True)
-    photo_id = Column(Integer)
     candidate_id = Column(Integer, ForeignKey('candidate.id'))
 
 class UserCandidate(Base):
     __tablename__ = 'user_candidate'
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('user.id'))
     candidate_id = Column(Integer, ForeignKey('candidate.id'))

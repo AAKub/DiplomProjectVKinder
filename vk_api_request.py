@@ -1,6 +1,6 @@
 import requests
 import datetime
-
+from model import User
 
 PROTOCOL_VERSION = "5.131"
 
@@ -15,7 +15,7 @@ class VkUser:
         'relation': 'семейное положение'
     }
     METHOD_USERS_SEARCH = "users.search"
-    COUNT_USERS_SEARCH = 10
+    COUNT_USERS_SEARCH = 1
     METHOD_PHOTOS_GET = "photos.get"
     COUNT_PHOTOS_GET = 1000
 
@@ -56,11 +56,12 @@ class VkUser:
 
         return params_for_users_search
 
-    def users_search(self, params_for_users_search, AGE_FROM, AGE_TO):
+    def users_search(self, params_for_users_search, AGE_FROM, AGE_TO, user_id, session):
         url = self.get_url(self.METHOD_USERS_SEARCH)
         params = {
             'access_token': self.token,
             'count': self.COUNT_USERS_SEARCH,
+            'fields': 'screen_name',
             'city': params_for_users_search['city'],
             'sex': params_for_users_search['sex'],
             'age_from': AGE_FROM,
@@ -69,14 +70,13 @@ class VkUser:
             'has_photo': 1,
             'offset': 78
         }
-        response = requests.get(url, params=params)
-        return response.json()['response']['items']
-
-    def get_ids_searched_people(self, searched_people):
-        ids_list = []
-        for people in searched_people:
-            ids_list.append(people['id'])
-        return ids_list
+        def already_matched(user_id, candidate_id):
+            user = session.query(User).filter(User.id == user_id, User.candidates.any(id=candidate_id)).first()
+            return user is not None
+        response = requests.get(url, params=params).json()['response']
+        items = [item for item in response['items'] if
+                 not item['is_closed'] and not already_matched(user_id, item['id'])]
+        return items
 
     def photos_get(self, owner_id):
         url = self.get_url(self.METHOD_PHOTOS_GET)
@@ -88,8 +88,15 @@ class VkUser:
             'owner_id': owner_id,
             'v': self.PROTOCOL_VERSION
         }
-        response = requests.get(url, params=params)
-        return response.json()['response']['items']
+        response = requests.get(url, params=params).json()['response']
+        items = response['items']
+
+        def count_likes_and_comments(item):
+            return item['likes']['count'] + item['comments']['count']
+
+        items.sort(key=count_likes_and_comments)
+        top_photos = items[-3:]
+        return top_photos
 
 def get_token(client_id):
     AUTH_LINK = 'https://oauth.vk.com/authorize?client_id=' + client_id + '&display=page&redirect_uri=https://oauth.vk.com/blank.html&scope=status.offline&response_type=token&v=' + PROTOCOL_VERSION

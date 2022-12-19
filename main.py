@@ -1,5 +1,8 @@
 from vk_api import VkApi
 from vk_api.longpoll import VkLongPoll, VkEventType
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from model import Base, User, Candidate, Photo
 from vk_api_request import VkUser
 from vk_api_request import get_token
 from my_token import TOKEN
@@ -18,6 +21,10 @@ DB_URL = 'postgresql://postgres:18722009@localhost/vkinder_db'
 vk = VkApi(token=GROUP_TOKEN)
 long_poll = VkLongPoll(vk)
 
+engine = create_engine(DB_URL, echo=True)
+Base.metadata.create_all(engine)
+Session = sessionmaker(engine)
+session = Session()
 GREETING = """Привет, {}.
 Я - чат-бот социальной сети "ВКонтакте".
 Я помогу тебе подобрать пару.
@@ -27,7 +34,7 @@ for event in long_poll.listen():
     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
         USER_ID = event.user_id
         # request = event.text
-        bot = VkBot(USER_ID, vk)
+        bot = VkBot(USER_ID, vk, session)
         bot.write_msg(GREETING.format(USER_ID))
         bot.write_msg(get_token(CLIENT_ID))
         vk_client = VkUser(TOKEN, USER_ID)
@@ -49,24 +56,42 @@ for event in long_poll.listen():
         break
 
 params_for_users_search = vk_client.prepare_params_for_users_search(user_info)
-searched_people = vk_client.users_search(params_for_users_search, AGE_FROM, AGE_TO)
-pprint(searched_people)
-ids_searched_people = vk_client.get_ids_searched_people(searched_people)
-pprint(ids_searched_people)
+user = session.query(User).filter(User.id == USER_ID).first()
+candidates = vk_client.users_search(params_for_users_search, AGE_FROM, AGE_TO, USER_ID, session)
+pprint(candidates)
 
-for owner_id in ids_searched_people:
-    time.sleep(0.2)
-    searched_photo = vk_client.photos_get(owner_id)
-    photos = {}
-    for photo in searched_photo:
-        likes = photo['likes']['count']
-        comments = photo['comments']['count']
-        for size in photo['sizes']:
-            if size['type'] != '':
-                url = size['url']
+for candidate in candidates:
+    # time.sleep(0.2)
+    top_photos = vk_client.photos_get(candidate['id'])
+    result = f"{candidate['first_name']} {candidate['last_name']}\n"
+    result += f"https://vk.com/{candidate['screen_name']}\n"
+    candidate_exists = session.query(Candidate).filter(Candidate.id == candidate['id']).first()
+    if not candidate_exists:
+        c = Candidate(
+            id=candidate['id'],
+            first_name=candidate['first_name'],
+            last_name=candidate['last_name'],
+            screen_name=candidate['screen_name']
+        )
+        session.add(c)
+        user.candidates.append(c)
+    else:
+        user.candidates.append(candidate_exists)
 
-        photos[url] = likes + comments
-    top3_photos = sorted(photos.items(), key=lambda x: x[1], reverse=True)[0:3]
-    print('Топ 3 фото для id', owner_id, top3_photos)
+    bot.write_msg(result)
 
-# pprint(searched_photo)
+    attachments = []
+    for photo in top_photos:
+        owner_photo_id = f"photo{photo['owner_id']}_{photo['id']}"
+        attachments.append(owner_photo_id)
+        photo_exists = session.query(Photo).filter(Photo.id == owner_photo_id).first()
+        if not photo_exists:
+            session.add(
+                Photo(
+                    id=owner_photo_id,
+                    candidate_id=photo['owner_id']
+                )
+            )
+    bot.send_attachment(','.join(attachments))
+
+session.commit()
