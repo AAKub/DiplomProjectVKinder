@@ -15,7 +15,7 @@ class VkUser:
         'relation': 'семейное положение'
     }
     METHOD_USERS_SEARCH = "users.search"
-    COUNT_USERS_SEARCH = 1
+    COUNT_USERS_SEARCH = 10
     METHOD_PHOTOS_GET = "photos.get"
     COUNT_PHOTOS_GET = 1000
 
@@ -100,4 +100,4 @@ class VkUser:
 
 def get_token(client_id):
     AUTH_LINK = 'https://oauth.vk.com/authorize?client_id=' + client_id + '&display=page&redirect_uri=https://oauth.vk.com/blank.html&scope=status.offline&response_type=token&v=' + PROTOCOL_VERSION
-    return 'Токен можно получить по этой ссылке: ' + AUTH_LINK
+    return 'Для начала поиска напишите ваш токен. Токен можно получить по этой ссылке: ' + AUTH_LINK

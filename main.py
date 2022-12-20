@@ -5,60 +5,72 @@ from sqlalchemy.orm import sessionmaker, Session
 from model import Base, User, Candidate, Photo
 from vk_api_request import VkUser
 from vk_api_request import get_token
-from my_token import TOKEN
+from my_token import TOKEN, GROUP_TOKEN
 from vk_bot import VkBot
 from pprint import pprint
 import time
 
 
 CLIENT_ID = '51502867'
-GROUP_TOKEN = 'vk1.a.WuMWkWX715EJBTdtqiaO6P5H1R42gA6q2_kDyC7on96imGkWiBZymzK3tUB7E4PuLaJK1NDDs37aKrHCUytVTLlKSDtBMb2IAOpYseEuE06dIKR9m0ccPRYnAvy0stfajx6LB8abCo2hv_CQxpwt7BkyayzyX9SssBgLt7WMweGX_LkZVLU8COeU_MGwM3ZO3bif9iY1f9gw3ne2fJm36A'
-DB_URL = 'postgresql://postgres:18722009@localhost/vkinder_db'
-
-# AGE_FROM = int(input('Введите минимальный возраст для поиска -> '))
-# AGE_TO = int(input('Введите максимальный возраст для поиска -> '))
+DB_URL = 'postgresql://postgres:***@localhost/vkinder_db'
 
 vk = VkApi(token=GROUP_TOKEN)
 long_poll = VkLongPoll(vk)
 
 engine = create_engine(DB_URL, echo=True)
+# Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 Session = sessionmaker(engine)
 session = Session()
 GREETING = """Привет, {}.
 Я - чат-бот социальной сети "ВКонтакте".
 Я помогу тебе подобрать пару.
-Для начала мне нужно получить от тебя токен..."""
+"""
 
 for event in long_poll.listen():
     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
         USER_ID = event.user_id
-        # request = event.text
         bot = VkBot(USER_ID, vk, session)
         bot.write_msg(GREETING.format(USER_ID))
-        bot.write_msg(get_token(CLIENT_ID))
+        break
+bot.write_msg(get_token(CLIENT_ID))
+for event in long_poll.listen():
+    if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+        USER_TOKEN = event.text
         vk_client = VkUser(TOKEN, USER_ID)
         user_info = vk_client.users_get()
         if isinstance(user_info, str):
             bot.write_msg(user_info)
             exit()
         break
-print(user_info['response'][0])
+
 bot.write_msg('Введите минимальный возраст для поиска -> ')
 for event in long_poll.listen():
     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-        AGE_FROM = int(event.text)
-        break
+        try:
+            if 16 <= int(event.text) <= 100:
+                AGE_FROM = int(event.text)
+                break
+            else:
+                bot.write_msg('Введите корректный возраст от 16 до 100')
+        except ValueError:
+            bot.write_msg('Введите числовое значение')
+
 bot.write_msg('Введите максимальный возраст для поиска -> ')
 for event in long_poll.listen():
     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-        AGE_TO = int(event.text)
-        break
+        try:
+            if 16 <= int(event.text) <= 100 and int(event.text) >= AGE_FROM:
+                AGE_TO = int(event.text)
+                break
+            else:
+                bot.write_msg('Введите корректный возраст от минимального до 100')
+        except ValueError:
+            bot.write_msg('Введите числовое значение')
 
 params_for_users_search = vk_client.prepare_params_for_users_search(user_info)
 user = session.query(User).filter(User.id == USER_ID).first()
 candidates = vk_client.users_search(params_for_users_search, AGE_FROM, AGE_TO, USER_ID, session)
-pprint(candidates)
 
 for candidate in candidates:
     # time.sleep(0.2)
