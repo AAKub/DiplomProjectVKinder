@@ -35,10 +35,13 @@ class VkUser:
             'v': self.PROTOCOL_VERSION
         }
         response = requests.get(url, params=params)
-        check = self.check_user_info(response.json())
-        if check is not None:
-            return check
-        return response.json()
+        if response.status_code == 200:
+            check = self.check_user_info(response.json())
+            if check is not None:
+                return check
+            return response.json()
+        else:
+            return
 
     def check_user_info(self, user_info):
         empty_fields = ', '.join(f'{v}' for k, v in self.FIELDS.items() if k not in user_info['response'][0].keys())
@@ -73,10 +76,14 @@ class VkUser:
         def already_matched(user_id, candidate_id):
             user = session.query(User).filter(User.id == user_id, User.candidates.any(id=candidate_id)).first()
             return user is not None
-        response = requests.get(url, params=params).json()['response']
-        items = [item for item in response['items'] if
-                 not item['is_closed'] and not already_matched(user_id, item['id'])]
-        return items
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            response = response.json()['response']
+            items = [item for item in response['items'] if
+                     not item['is_closed'] and not already_matched(user_id, item['id'])]
+            return items
+        else:
+            return
 
     def photos_get(self, owner_id):
         url = self.get_url(self.METHOD_PHOTOS_GET)
@@ -88,15 +95,19 @@ class VkUser:
             'owner_id': owner_id,
             'v': self.PROTOCOL_VERSION
         }
-        response = requests.get(url, params=params).json()['response']
-        items = response['items']
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            response = response.json()
+            items = response['response']['items']
 
-        def count_likes_and_comments(item):
-            return item['likes']['count'] + item['comments']['count']
+            def count_likes_and_comments(item):
+                return item['likes']['count'] + item['comments']['count']
 
-        items.sort(key=count_likes_and_comments)
-        top_photos = items[-3:]
-        return top_photos
+            items.sort(key=count_likes_and_comments)
+            top_photos = items[-3:]
+            return top_photos
+        else:
+            return
 
 def get_token(client_id):
     AUTH_LINK = 'https://oauth.vk.com/authorize?client_id=' + client_id + '&display=page&redirect_uri=https://oauth.vk.com/blank.html&scope=status.offline&response_type=token&v=' + PROTOCOL_VERSION

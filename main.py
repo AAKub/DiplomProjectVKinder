@@ -18,7 +18,7 @@ vk = VkApi(token=GROUP_TOKEN)
 long_poll = VkLongPoll(vk)
 
 engine = create_engine(DB_URL, echo=True)
-# Base.metadata.drop_all(engine)
+Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 Session = sessionmaker(engine)
 session = Session()
@@ -42,7 +42,11 @@ for event in long_poll.listen():
         if isinstance(user_info, str):
             bot.write_msg(user_info)
             exit()
+        if user_info is None:
+            bot.write_msg('Сервер не отвечает. Попробуйте позже...')
+            exit()
         break
+
 
 bot.write_msg('Введите минимальный возраст для поиска -> ')
 for event in long_poll.listen():
@@ -71,10 +75,15 @@ for event in long_poll.listen():
 params_for_users_search = vk_client.prepare_params_for_users_search(user_info)
 user = session.query(User).filter(User.id == USER_ID).first()
 candidates = vk_client.users_search(params_for_users_search, AGE_FROM, AGE_TO, USER_ID, session)
-
+if candidates is None:
+    bot.write_msg('Сервер не отвечает. Попробуйте позже...')
+    exit()
 for candidate in candidates:
     # time.sleep(0.2)
     top_photos = vk_client.photos_get(candidate['id'])
+    if top_photos is None:
+        bot.write_msg('Сервер не отвечает. Попробуйте позже...')
+        exit()
     result = f"{candidate['first_name']} {candidate['last_name']}\n"
     result += f"https://vk.com/{candidate['screen_name']}\n"
     candidate_exists = session.query(Candidate).filter(Candidate.id == candidate['id']).first()
